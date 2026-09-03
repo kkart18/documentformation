@@ -1,0 +1,130 @@
+<!-- =========================================================================
+  ПОДПИСЬ → PNG. Распишитесь мышью или пальцем, сохраните как PNG
+  с прозрачным фоном в высоком разрешении. Всё работает в браузере,
+  ничего никуда не отправляется.
+========================================================================= -->
+<div id="sp-app">
+  <div class="sp-card">
+    <div class="sp-head">
+      <div class="sp-logo">СР</div>
+      <div>
+        <div class="sp-title">Подпись в PNG</div>
+        <div class="sp-sub">Тонкая тёмно-синяя линия, как шариковой ручкой. Сохраняется с прозрачным фоном.</div>
+      </div>
+    </div>
+
+    <div class="sp-wrap">
+      <canvas id="pad"></canvas>
+      <span class="sp-line"></span>
+      <span class="sp-hint" id="hint">распишитесь здесь</span>
+    </div>
+
+    <div class="sp-row">
+      <label class="sp-opt"><span>Толщина линии</span>
+        <input type="range" id="width" min="1" max="3.5" step="0.1" value="1.6"><b id="widthVal">1.6</b></label>
+      <label class="sp-opt"><span>Качество</span>
+        <select id="scale">
+          <option value="2">хорошее (×2)</option>
+          <option value="3" selected>высокое (×3)</option>
+          <option value="4">максимальное (×4)</option>
+        </select></label>
+    </div>
+
+    <div class="sp-btns">
+      <button type="button" class="sp-btn sp-btn--ghost" id="undo">Отменить штрих</button>
+      <button type="button" class="sp-btn sp-btn--ghost" id="clear">Очистить</button>
+      <button type="button" class="sp-btn" id="save">Сохранить PNG</button>
+    </div>
+    <div class="sp-note">Совет: расписывайтесь широко, на всё поле — при сохранении лишние поля вокруг подписи обрежутся автоматически, а качество будет выше.</div>
+  </div>
+</div>
+
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+#sp-app{ --choco:#4A2C1A; --caramel:#B87333; --gold:#C9A24B; --cream:#FBF3E7; --line:#E7D8C4; --text:#2E1E14;
+  max-width:760px; margin:0 auto; padding:16px; box-sizing:border-box; color:var(--text); font-family:Arial,Helvetica,sans-serif; line-height:1.45; }
+#sp-app *{ box-sizing:border-box; }
+#sp-app .sp-card{ background:var(--cream); border:1px solid var(--line); border-radius:16px; padding:20px 18px 22px; box-shadow:0 8px 28px rgba(74,44,26,.10); }
+#sp-app .sp-head{ display:flex; gap:12px; align-items:center; margin-bottom:16px; }
+#sp-app .sp-logo{ width:44px; height:44px; flex:0 0 44px; border-radius:12px; background:var(--choco); color:var(--gold); font-family:Montserrat,sans-serif; font-weight:700; display:flex; align-items:center; justify-content:center; letter-spacing:1px; }
+#sp-app .sp-title{ font-family:Montserrat,sans-serif; font-weight:700; font-size:19px; color:var(--choco); }
+#sp-app .sp-sub{ font-size:12.5px; color:#6b5240; margin-top:2px; }
+#sp-app .sp-wrap{ position:relative; background:#fff; border:1px solid var(--line); border-radius:12px; overflow:hidden; }
+#sp-app #pad{ display:block; width:100%; height:300px; touch-action:none; -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; cursor:crosshair; }
+#sp-app .sp-line{ position:absolute; left:32px; right:32px; bottom:64px; border-bottom:1px dashed #d9c3a6; pointer-events:none; }
+#sp-app .sp-hint{ position:absolute; left:0; right:0; top:44%; text-align:center; color:#cdbba6; font-size:14px; pointer-events:none; }
+#sp-app .sp-row{ display:flex; gap:16px; flex-wrap:wrap; margin-top:12px; }
+#sp-app .sp-opt{ display:flex; align-items:center; gap:8px; font-size:12.5px; color:#6b5240; }
+#sp-app .sp-opt span{ font-weight:600; }
+#sp-app .sp-opt input[type=range]{ width:140px; accent-color:var(--caramel); }
+#sp-app .sp-opt b{ color:var(--choco); min-width:24px; }
+#sp-app .sp-opt select{ font-family:Arial,sans-serif; font-size:13px; padding:6px 9px; border:1px solid var(--line); border-radius:8px; background:#fff; color:var(--text); }
+#sp-app .sp-btns{ display:flex; gap:10px; margin-top:16px; flex-wrap:wrap; }
+#sp-app .sp-btn{ font-family:Montserrat,sans-serif; font-weight:600; font-size:14px; padding:12px 20px; border:none; border-radius:11px; background:var(--choco); color:var(--cream); cursor:pointer; flex:1; }
+#sp-app .sp-btn:hover{ background:#3a2115; }
+#sp-app .sp-btn--ghost{ background:transparent; color:var(--choco); border:1px solid var(--line); flex:0 0 auto; }
+#sp-app .sp-btn--ghost:hover{ background:#F5E9D8; }
+#sp-app .sp-note{ font-size:11.5px; color:#8a6f58; margin-top:12px; }
+</style>
+
+<script>
+(function(){
+  const $=s=>document.querySelector(s);
+  const INK='#1a2f6b';                       // тёмно-синий, как шариковая ручка
+  const pad=$('#pad'), ctx=pad.getContext('2d');
+  let strokes=[], cur=null, drawing=false, dpr=1, cssW=0, cssH=0;
+
+  function fit(){ const r=pad.getBoundingClientRect(); dpr=Math.max(2,window.devicePixelRatio||1);
+    cssW=r.width; cssH=r.height; pad.width=cssW*dpr; pad.height=cssH*dpr; redraw(); }
+  const width=()=>parseFloat($('#width').value);
+  $('#width').oninput=()=>{ $('#widthVal').textContent=width().toFixed(1); redraw(); };
+
+  // Сглаженная линия: точки соединяются кривыми через середины отрезков — штрих без «углов»
+  function drawStroke(c,pts,w,scale){
+    if(pts.length<2){ if(pts.length===1){ c.beginPath(); c.arc(pts[0].x*scale,pts[0].y*scale,w*scale/2,0,Math.PI*2); c.fillStyle=INK; c.fill(); } return; }
+    c.lineWidth=w*scale; c.lineCap='round'; c.lineJoin='round'; c.strokeStyle=INK;
+    c.beginPath(); c.moveTo(pts[0].x*scale,pts[0].y*scale);
+    for(let i=1;i<pts.length-1;i++){ const mx=(pts[i].x+pts[i+1].x)/2, my=(pts[i].y+pts[i+1].y)/2;
+      c.quadraticCurveTo(pts[i].x*scale,pts[i].y*scale,mx*scale,my*scale); }
+    const l=pts[pts.length-1]; c.lineTo(l.x*scale,l.y*scale); c.stroke();
+  }
+  function redraw(){ ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,pad.width,pad.height);
+    strokes.forEach(s=>drawStroke(ctx,s,width(),dpr)); if(cur)drawStroke(ctx,cur,width(),dpr);
+    $('#hint').style.display=(strokes.length||cur)?'none':''; }
+
+  const pos=e=>{ const r=pad.getBoundingClientRect(), t=e.touches?e.touches[0]:e; return {x:t.clientX-r.left,y:t.clientY-r.top}; };
+  const start=e=>{ e.preventDefault(); drawing=true; cur=[pos(e)]; redraw(); };
+  const move=e=>{ if(!drawing)return; e.preventDefault(); const p=pos(e), l=cur[cur.length-1];
+    if(Math.hypot(p.x-l.x,p.y-l.y)>0.8){ cur.push(p); redraw(); } };
+  const end=()=>{ if(!drawing)return; drawing=false; if(cur&&cur.length){ strokes.push(cur); } cur=null; redraw(); };
+  // Универсальные события указателя: мышь, палец, стилус (Apple Pencil и др.)
+  if(window.PointerEvent){
+    pad.addEventListener('pointerdown',e=>{ pad.setPointerCapture(e.pointerId); start(e); });
+    pad.addEventListener('pointermove',move);
+    pad.addEventListener('pointerup',end); pad.addEventListener('pointercancel',end);
+  } else {
+    pad.addEventListener('mousedown',start); pad.addEventListener('mousemove',move); window.addEventListener('mouseup',end);
+    pad.addEventListener('touchstart',start,{passive:false}); pad.addEventListener('touchmove',move,{passive:false}); pad.addEventListener('touchend',end);
+  }
+  $('#undo').onclick=()=>{ strokes.pop(); redraw(); };
+  $('#clear').onclick=()=>{ strokes=[]; cur=null; redraw(); };
+  window.addEventListener('resize',fit); fit();
+
+  // Сохранение: рендер заново в высоком разрешении, обрезка пустых полей, прозрачный фон
+  $('#save').onclick=()=>{
+    if(!strokes.length){ alert('Сначала распишитесь.'); return; }
+    const scale=parseInt($('#scale').value,10)*2;          // ×2 базовой плотности → ×4/×6/×8 к экрану
+    const off=document.createElement('canvas'); off.width=cssW*scale; off.height=cssH*scale;
+    const oc=off.getContext('2d'); strokes.forEach(s=>drawStroke(oc,s,width(),scale));
+    const img=oc.getImageData(0,0,off.width,off.height).data;
+    let x0=off.width,y0=off.height,x1=0,y1=0;
+    for(let y=0;y<off.height;y++)for(let x=0;x<off.width;x++){ if(img[(y*off.width+x)*4+3]>0){ if(x<x0)x0=x; if(x>x1)x1=x; if(y<y0)y0=y; if(y>y1)y1=y; } }
+    const padPx=Math.round(12*scale), cw=Math.min(off.width,x1-x0+padPx*2), ch=Math.min(off.height,y1-y0+padPx*2);
+    const out=document.createElement('canvas'); out.width=cw; out.height=ch;
+    out.getContext('2d').drawImage(off,Math.max(0,x0-padPx),Math.max(0,y0-padPx),cw,ch,0,0,cw,ch);
+    out.toBlob(b=>{ const u=URL.createObjectURL(b), a=document.createElement('a');
+      a.href=u; a.download='подпись.png'; document.body.appendChild(a); a.click();
+      setTimeout(()=>{URL.revokeObjectURL(u);a.remove();},1500); },'image/png');
+  };
+})();
+</script>
