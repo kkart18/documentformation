@@ -35,6 +35,10 @@
       <button type="button" class="sp-btn sp-btn--ghost" id="clear">Очистить</button>
       <button type="button" class="sp-btn" id="save">Сохранить PNG</button>
     </div>
+    <div class="sp-result" id="result" hidden>
+      <div class="sp-result-t">Подпись сохранена. Если файл не скачался — удерживайте картинку ниже и выберите «Сохранить в Фото» (планшет/телефон) или «Сохранить изображение как…» (компьютер).</div>
+      <div class="sp-result-img"><img id="resultImg" alt="подпись"></div>
+    </div>
     <div class="sp-note">Совет: расписывайтесь широко, на всё поле — при сохранении лишние поля вокруг подписи обрежутся автоматически, а качество будет выше.</div>
   </div>
 </div>
@@ -65,6 +69,10 @@
 #sp-app .sp-btn--ghost{ background:transparent; color:var(--choco); border:1px solid var(--line); flex:0 0 auto; }
 #sp-app .sp-btn--ghost:hover{ background:#F5E9D8; }
 #sp-app .sp-note{ font-size:11.5px; color:#8a6f58; margin-top:12px; }
+#sp-app .sp-result{ margin-top:16px; background:#fff; border:1px solid var(--gold); border-radius:12px; padding:12px; }
+#sp-app .sp-result-t{ font-size:12.5px; color:var(--choco); margin-bottom:10px; }
+#sp-app .sp-result-img{ background:repeating-conic-gradient(#f3ede4 0 25%,#fff 0 50%) 0 0/16px 16px; border-radius:8px; padding:12px; text-align:center; }
+#sp-app .sp-result-img img{ max-width:100%; max-height:220px; -webkit-touch-callout:default; }
 </style>
 
 <script>
@@ -122,9 +130,12 @@
     const padPx=Math.round(12*scale), cw=Math.min(off.width,x1-x0+padPx*2), ch=Math.min(off.height,y1-y0+padPx*2);
     const out=document.createElement('canvas'); out.width=cw; out.height=ch;
     out.getContext('2d').drawImage(off,Math.max(0,x0-padPx),Math.max(0,y0-padPx),cw,ch,0,0,cw,ch);
-    out.toBlob(b=>{ const u=URL.createObjectURL(b), a=document.createElement('a');
-      a.href=u; a.download='подпись.png'; document.body.appendChild(a); a.click();
-      setTimeout(()=>{URL.revokeObjectURL(u);a.remove();},1500); },'image/png');
+    // синхронно — Safari на iPad разрешает скачивание только в момент нажатия
+    const url=out.toDataURL('image/png');
+    const a=document.createElement('a'); a.href=url; a.download='подпись.png';
+    document.body.appendChild(a); a.click(); setTimeout(()=>a.remove(),1000);
+    $('#resultImg').src=url; $('#result').hidden=false;
+    $('#result').scrollIntoView({behavior:'smooth',block:'nearest'});
   };
 })();
 </script>
