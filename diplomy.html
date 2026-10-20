@@ -145,6 +145,8 @@ table.t td.mid{vertical-align:middle}
 .el .lb small{color:var(--muted)}
 .props{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
 .props .f{grid-column:auto}
+.tplf{margin-bottom:10px}.tplf textarea{width:100%;font:inherit;font-size:13px;line-height:1.4;resize:vertical;min-height:2.6em}.tplhead{display:grid;gap:4px;margin-bottom:6px}
+.tplv summary{cursor:pointer;font-size:12px;color:var(--muted,#666);margin:4px 0}.chips{display:flex;flex-wrap:wrap;gap:4px;margin:4px 0 6px}.chip{font:inherit;font-size:11.5px;padding:3px 7px;border:1px solid var(--line,#d5d5cf);border-radius:999px;background:var(--card,#fff);color:inherit;cursor:pointer}.chip:hover{border-color:currentColor}
 .seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;flex-wrap:wrap}
 .seg button{all:unset;cursor:pointer;padding:7px 12px;font-size:13px;color:var(--muted)}
 .seg button.on{background:var(--accent);color:var(--accent-ink)}
@@ -644,8 +646,8 @@ async function sheetPush(){const u=S.syncUrl;if(!u||DB||S.demo)return false;cons
   SHEET_BUSY=true;setSync('saving');try{const d=await gasPost({action:'save',login:a.login,password:a.password,settings:sharedPayload()});
   if(d&&d.ok){S.lastBy=`${d.name||a.name}, ${fmtWhen(new Date().toISOString())}`;setSync('sheet');return true}if(d&&d.error==='forbidden'){setAuth(null);setSync('pw');return false}if(d&&d.error==='no_rights'){a.canEdit=false;setAuth(a);setSync('noedit');return false}setSync('err');return false}catch{setSync('err');return false}finally{SHEET_BUSY=false}}
 function openLogin(){$('#loginPanel').hidden=false;window.scrollTo(0,0);$('#lg_login').focus()}
-async function fileSettings(){try{const r=await fetch('diplomy-settings.json',{cache:'no-store'});if(!r.ok)return;const d=await r.json();if(!d||!Array.isArray(d.programs))return;const loc=LS.get('dpoDiplom.settings.v1');
-  if(!loc||S.demo||!(loc.savedAt>=d.savedAt)){applyShared(d);const l2=LS.get('dpoDiplom.settings.v1')||{};l2.savedAt=d.savedAt;LS.set('dpoDiplom.settings.v1',l2)}$('#syncState').textContent='Общие настройки — из файла diplomy-settings.json'}catch{}}
+async function fileSettings(){try{const C=window.DIPLOMY_CFG;if(C&&C.syncUrl)S.syncUrl=C.syncUrl;let d;if(C&&C.settings)d=JSON.parse(JSON.stringify(C.settings));else{const r=await fetch('diplomy-settings.json',{cache:'no-store'});if(!r.ok)return;d=await r.json()}if(C&&C.syncUrl)d.syncUrl=C.syncUrl;if(!d||!Array.isArray(d.programs))return;const loc=LS.get('dpoDiplom.settings.v1');
+  if(!loc||S.demo||!(loc.savedAt>=d.savedAt)){applyShared(d);const l2=LS.get('dpoDiplom.settings.v1')||{};l2.savedAt=d.savedAt;LS.set('dpoDiplom.settings.v1',l2)}$('#syncState').textContent=(C&&C.settings)?'Общие настройки — встроенные в страницу':'Общие настройки — из файла diplomy-settings.json'}catch{}}
 async function dbInit(){if(!(window.claude&&claude.use))return;try{DB=await claude.use('db')}catch{DB=null}if(!DB){setSync('local');return}
   try{const snap=await DB.doc('settings/shared').get();if(snap.exists)applyShared(snap.data());else if(!S.demo)await pushShared();else setSync('ok');if(snap.exists)setSync('ok')}catch{setSync('err')}}
 let saveT;function save(){syncProg();clearTimeout(saveT);clearTimeout(dbT);clearTimeout(SHEET_T);if(DB&&!S.demo)dbT=setTimeout(pushShared,1200);else if(S.syncUrl&&!S.demo)SHEET_T=setTimeout(()=>{SHEET_T=null;sheetPush()},1500);saveT=setTimeout(()=>{LS.set('dpoDiplom.settings.v1',{savedAt:Date.now(),syncUrl:S.syncUrl||'',programs:S.programs,cur:S.cur,pageSize:S.pageSize,layoutVer:2,ahMig:true,sigFix:true,program:S.program,disc:S.disc,layout:S.layout,offsets:S.offsets,bgOpacity:S.bgOpacity,labelTone:S.labelTone,demo:S.demo,calibOk:S.calibOk,blanks:S.blanks})},300)}
@@ -678,9 +680,26 @@ function ctxFor(stu,i){
     appProg:`${passed(stu.sex)} профессиональную переподготовку по программе\n${guil(p.program)}`,
     prevEdu:stu.prevEdu||'',
     dipNoLine:`Выдан диплом о профессиональной переподготовке № ${blankFor('dip',i,stu.key)}`,
-    grade:''
+    grade:'',
+    $v:{'фамилия':stu.surname||'','имя':stu.name||'','отчество':stu.patronymic||'','фио':fio1,'прошел':passed(stu.sex),
+      'орг':p.orgShort||'','орг_полное':p.orgFull||'','программа':guil(p.program),'часы':String(p.hours||''),'ед_часов':hoursWord(p.hours,p.hoursUnit),'ед_кратко':p.hoursUnit==='ah'?'ак. час.':'час.',
+      'начало':fmtDate(p.from),'окончание':fmtDate(p.to),'дата_решения':fmtDate(p.decDate),'протокол':p.protocol||'','квалификация':guil(p.qual),'сфера':p.sphere||'',
+      'город':p.city||'','дата_выдачи':fmtDate(p.issueDate),'рег_номер':stu.regOverride||regNo(i),'номер_диплома':blankFor('dip',i,stu.key),'руководитель':p.head||'',
+      'предыдущее_образование':stu.prevEdu||'','доп_сведения':p.extra||''}
   };
 }
+/* ============ editable texts (templates) ============ */
+const TPL_VARS=[['фамилия','Фамилия'],['имя','Имя'],['отчество','Отчество'],['фио','Фамилия Имя Отчество'],['прошел','прошел / прошла'],
+  ['орг','Организация кратко'],['орг_полное','Организация полностью'],['программа','«Программа»'],['часы','Объём, число'],['ед_часов','академических часов'],['ед_кратко','ак. час.'],
+  ['начало','Дата начала'],['окончание','Дата окончания'],['дата_решения','Дата решения'],['протокол','№ протокола'],['квалификация','«Квалификация»'],['сфера','Сфера'],
+  ['город','Город'],['дата_выдачи','Дата выдачи'],['рег_номер','Рег. номер'],['номер_диплома','№ бланка диплома'],['руководитель','Руководитель'],['предыдущее_образование','Предыдущее образование'],['доп_сведения','Доп. сведения']];
+const TPL_DEF={orgFull:'{орг_полное}',regNo:'{рег_номер}',city:'{город}',issueDate:'{дата_выдачи}',fio2:'{фамилия}\n{имя} {отчество}',fio1:'{фамилия} {имя} {отчество}',
+  progLine:'{орг} по программе {программа} в объеме {часы} {ед_часов} с {начало} по {окончание}',decision:'{дата_решения} протокол {протокол}',decisionOt:'от {дата_решения} протокол {протокол}',
+  qualQ:'{квалификация}',sphere:'{сфера}',head:'{руководитель}',appProg:'{прошел} профессиональную переподготовку по программе\n{программа}',prevEdu:'{предыдущее_образование}',
+  dipNoLine:'Выдан диплом о профессиональной переподготовке № {номер_диплома}',hoursAF:'{часы} {ед_кратко}',extra:'{доп_сведения}'};
+function fillTpl(t,v){if(!t)return'';if(!v||t.indexOf('{')<0)return t;return String(t).replace(/\{([а-яёa-z_]+)\}/gi,(m,k)=>{k=k.toLowerCase();return Object.prototype.hasOwnProperty.call(v,k)?v[k]:m}).split('\n').map(l=>l.replace(/[ \t]{2,}/g,' ').trim()).join('\n').replace(/^\n+|\n+$/g,'')}
+function elText(e,ctx){if(e.key===undefined)return fillTpl(e.text||'',ctx&&ctx.$v);if(typeof e.tpl==='string')return fillTpl(e.tpl,ctx.$v);return ctx[e.key]??''}
+function tblHead(T){return{h1:T.h1??'Наименование дисциплин (модулей)',h2:T.h2??(S.program.hoursUnit==='ah'?'Общее\nколичество\nакадемических\nчасов':'Общее\nколичество\nчасов'),h3:T.h3??'Оценка',tot:T.tot??'Всего'}}
 
 /* ============ draw lists ============ */
 function fitLines(e,text){let sz=e.size,lines=wrap(text,e.w,e.st,sz,e.ls);if(e.max)while(lines.length>e.max&&sz>e.size*.6){sz=Math.round((sz-.25)*100)/100;lines=wrap(text,e.w,e.st,sz,e.ls)}return{sz,lines}}
@@ -701,7 +720,7 @@ function tableItems(T,stu,ctx,showBlank){
     const xe=v[v.length-1];L(v[0],T.top,xe,T.top);L(v[0],T.headB,xe,T.headB);L(v[0],T.bottom,xe,T.bottom);
     v.forEach(x=>L(x,T.top,x,T.bottom));
     const H=(txt,x1,x2,sz)=>{const lines=txt.split('\n');const adv=sz*PT_MM*1.15;const y0=(T.top+T.headB)/2-((lines.length-1)*adv)/2+sz*PT_MM*.33;lines.forEach((ln,i)=>{let z=sz;while(textW(ln,'L',z)>x2-x1-1.2&&z>5)z-=.2;const w=textW(ln,'L',z);items.push({k:'g',id:'TBL',role:grole,st:'L',sz:z,gs:run(ln,(x1+x2)/2-w/2,y0+i*adv,'L',z),bb:null})})};
-    H('Наименование дисциплин (модулей)',v[0],v[1],9);H(S.program.hoursUnit==='ah'?'Общее\nколичество\nакадемических\nчасов':'Общее\nколичество\nчасов',v[1],v[2],7);H('Оценка',v[2],v[3],8);
+    const TH=tblHead(T);H(TH.h1,v[0],v[1],9);H(TH.h2,v[1],v[2],7);H(TH.h3,v[2],v[3],8);
   }
   const rows=S.disc.filter(d=>d.name&&d.name.trim());
   const nameW=v[1]-1.5-T.nameX;const avail=T.bottom-1.5-T.y0;
@@ -711,7 +730,7 @@ function tableItems(T,stu,ctx,showBlank){
   let sum=0;
   layout.out.forEach((r,i)=>{const y=T.y0+r.y;const num=(i+1)+'.';gs.push(...run(num,T.numR-textW(num,'R',sz),y,'R',sz));r.lines.forEach((ln,j)=>gs.push(...run(ln,T.nameX,y+j*layout.adv,'R',sz)));
     cell(String(r.d.hours||''),v[1],v[2],y);cell(gradeOf(stu,r.d),v[2],v[3],y);sum+=parseFloat(String(r.d.hours).replace(',','.'))||0});
-  if(rows.length){const y=T.y0+layout.totY;gs.push(...run('Всего',T.nameX,y,'R',sz));cell(String(Math.round(sum*100)/100),v[1],v[2],y)}
+  if(rows.length){const y=T.y0+layout.totY;gs.push(...run(tblHead(T).tot,T.nameX,y,'R',sz));cell(String(Math.round(sum*100)/100),v[1],v[2],y)}
   items.push({k:'g',id:'TBL',role:'data',st:'R',sz,gs,bb:[v[0],T.top,v[v.length-1],T.bottom]});
   return items;
 }
@@ -727,8 +746,7 @@ function drawList(page,stu,i,showBlank){
     const role=d.role==='label'?'label':'data';
     if(e.type==='slot'){if(showBlank)items.push({k:'s',id:e.id,role,x:e.x,y:e.y,w:e.w,h:e.h,bb:[e.x,e.y,e.x+e.w,e.y+e.h]});continue}
     if(e.type==='vtext'){items.push(vtextItems(e,e.text,role));continue}
-    const text=e.key!==undefined?(ctx[e.key]??''):e.text;
-    items.push(textItems(e,text,role))}
+    items.push(textItems(e,elText(e,ctx),role))}
   return items;
 }
 
@@ -837,6 +855,7 @@ async function toCanvas(src,max=1600){
 const canvasJpeg=c=>new Promise(r=>c.toBlob(r,'image/jpeg',.86));
 let PDFJS=null;
 async function pdfjs(){if(PDFJS)return PDFJS;const a=document.getElementById('pdfjs-src'),b=document.getElementById('pdfjs-worker-src');const blob=t=>URL.createObjectURL(new Blob([t],{type:'text/javascript'}));
+  const C=window.DIPLOMY_CFG;if(!a&&C&&C.pdfjs){const m=await import(blob(await cdnText(C.pdfjs)));m.GlobalWorkerOptions.workerSrc=blob(await cdnText(C.pdfjsWorker));PDFJS=m;return m}
   const m=await import(a?blob(a.textContent):new URL('vendor/pdf.min.mjs',location.href).href);m.GlobalWorkerOptions.workerSrc=b?blob(b.textContent):new URL('vendor/pdf.worker.min.mjs',location.href).href;PDFJS=m;return m}
 async function pdfToPages(blob,maxPages=30,max=2000){
   const lib=await pdfjs();const doc=await lib.getDocument({data:new Uint8Array(await blob.arrayBuffer())}).promise;const n=Math.min(doc.numPages,maxPages);const pages=[];
@@ -873,7 +892,9 @@ const TESS_VER='5.1.1';
 let OCRW=null,OCR_DEAD=false,OCR_ERR='';
 function loadScript(src){return new Promise((res,rej)=>{if([...document.scripts].some(s=>s.src===src))return res();const s=document.createElement('script');s.src=src;s.onload=res;s.onerror=()=>rej(new Error('script'));document.head.appendChild(s)})}
 function withTimeout(p,ms,label){return new Promise((res,rej)=>{const t=setTimeout(()=>rej(new Error('timeout:'+label)),ms);p.then(v=>{clearTimeout(t);res(v)},e=>{clearTimeout(t);rej(e)})})}
-async function langData(code){const el=document.getElementById('tess-'+code);const t=el?el.textContent:await(await fetch(new URL(`tessdata/${code}.b64.txt`,location.href))).text();const bin=Uint8Array.from(atob(t.trim()),c=>c.charCodeAt(0));const st=new Blob([bin]).stream().pipeThrough(new DecompressionStream('gzip'));return new Uint8Array(await new Response(st).arrayBuffer())}
+async function cdnText(urls){let err;for(const u of urls){try{const r=await fetch(u);if(r.ok)return await r.text();err=new Error(r.status+' '+u)}catch(e){err=e}}throw err}
+async function cdnBytes(urls){let err;for(const u of urls){try{const r=await fetch(u);if(r.ok)return new Uint8Array(await r.arrayBuffer());err=new Error(r.status+' '+u)}catch(e){err=e}}throw err}
+async function langData(code){const el=document.getElementById('tess-'+code);const C=window.DIPLOMY_CFG;if(!el&&C&&C.tess){const gz=await cdnBytes(C.tess.map(u=>u.split('{lang}').join(code)));const st=new Blob([gz]).stream().pipeThrough(new DecompressionStream('gzip'));return new Uint8Array(await new Response(st).arrayBuffer())}const t=el?el.textContent:await(await fetch(new URL(`tessdata/${code}.b64.txt`,location.href))).text();const bin=Uint8Array.from(atob(t.trim()),c=>c.charCodeAt(0));const st=new Blob([bin]).stream().pipeThrough(new DecompressionStream('gzip'));return new Uint8Array(await new Response(st).arrayBuffer())}
 async function ocrWorkers(){
   if(OCR_DEAD)throw new Error('ocr-off');
   if(!OCRW)OCRW=withTimeout((async()=>{await loadScript(`https://cdn.jsdelivr.net/npm/tesseract.js@${TESS_VER}/dist/tesseract.min.js`);
@@ -1335,11 +1356,16 @@ function renderCalib(){
     ${d.type==='slot'?'<span class="hint">не печатается</span>':`<select data-mode="${d.id}" aria-label="Режим">${d.type==='table'?`<option value="print"${m==='print'?' selected':''}>С сеткой</option><option value="off"${m==='off'?' selected':''}>Без сетки</option>`:['print','off'].map(k=>`<option value="${k}"${m===k?' selected':''}>${MODE_RU[k]}</option>`).join('')}</select>`}</div>`}).join('');
   renderProps();
 }
+function tplBox(id,e,d){const isL=e.key===undefined;const k=isL?'text':'tpl';const val=isL?(e.text||''):(typeof e.tpl==='string'?e.tpl:(TPL_DEF[e.key]??''));
+  return`<div class="f tplf"><label class="l" for="pp_${k}">${isL?'Текст надписи':'Текст поля'} <span class="where">Enter — новая строка</span></label><textarea id="pp_${k}" data-pp="${k}" rows="${Math.min(4,Math.max(2,val.split('\n').length+1))}">${esc(val)}</textarea>
+  <details class="tplv"${isL?'':' open'}><summary>Подставить данные</summary><div class="chips">${TPL_VARS.map(([v,l])=>`<button type="button" class="chip" data-ins="{${v}}" title="{${v}}">${esc(l)}</button>`).join('')}</div>
+  <span class="hint">${isL?'Надпись печатается серым, как текст бланка.':'Слова в фигурных скобках заменяются данными программы и слушателя. Остальное печатается как написано.'}</span></details></div>`}
 function renderProps(){
   const box=$('#propCard');const id=S.ui.sel;const d=id&&DEFMAP[id];
   if(!d||d.page!==S.ui.cpage){box.innerHTML='<h3 style="margin-bottom:6px">Поле</h3><span class="hint">Нажмите на поле на листе или в списке ниже.</span>';return}
-  const e=el(id);const N=(k,l,st=.1)=>`<div class="f"><label class="l" for="pp_${k}">${l}</label><input id="pp_${k}" data-pp="${k}" type="number" step="${st}" class="mono" value="${e[k]}"></div>`;
-  if(d.type==='table'){box.innerHTML=`<h3 style="margin-bottom:10px">${esc(d.label)}</h3><div class="props">
+  const e=el(id);const N=(k,l,st=.1)=>`<div class="f"><label class="l" for="pp_${k}">${l}</label><input id="pp_${k}" data-pp="${k}" type="number" step="${st}" class="mono" value="${typeof e[k]==='number'?Math.round(e[k]*100)/100:e[k]}"></div>`;
+  if(d.type==='table'){const TH=tblHead(e);const TA=(k,l)=>`<div class="f tplf"><label class="l" for="pp_${k}">${l}</label><textarea id="pp_${k}" data-pp="${k}" rows="${Math.max(1,TH[k].split('\n').length)}">${esc(TH[k])}</textarea></div>`;
+    box.innerHTML=`<h3 style="margin-bottom:10px">${esc(d.label)}</h3><div class="tplhead">${TA('h1','Шапка: название')}${TA('h2','Шапка: часы')}${TA('h3','Шапка: оценка')}${TA('tot','Строка итога')}</div><div class="props">
     ${N('top','Верх сетки, мм')}${N('headB','Низ шапки, мм')}${N('bottom','Низ сетки, мм')}${N('y0','Первая строка, мм')}${N('numR','Номер: правый край')}${N('nameX','Название: слева')}
     ${e.v.map((x,j)=>`<div class="f"><label class="l" for="pp_v${j}">Линия ${j+1}, мм</label><input id="pp_v${j}" data-ppv="${j}" type="number" step="0.1" class="mono" value="${x}"></div>`).join('')}
     ${N('size','Кегль, пт',.25)}${N('lh','Интерлиньяж',.05)}
@@ -1347,7 +1373,7 @@ function renderProps(){
     <span class="hint" style="display:block;margin-top:8px">Линии слева направо: левый край, после названия, после часов, правый край. Кегль уменьшается сам, если дисциплины не помещаются.</span><div class="row" style="margin-top:10px"><button class="btn sm" data-reset="${id}" type="button">Сбросить поле</button></div>`;return}
   if(d.type==='vtext'){box.innerHTML=`<h3 style="margin-bottom:10px">${esc(d.label)}</h3><div class="props">${N('x','Центр по горизонтали, мм')}${N('y','Центр по вертикали, мм')}${N('size','Кегль, пт',.25)}${N('ls','Разрядка, мм',.05)}</div><div class="row" style="margin-top:10px"><button class="btn sm" data-reset="${id}" type="button">Сбросить поле</button></div>`;return}
   if(d.type==='slot'){box.innerHTML=`<h3 style="margin-bottom:10px">${esc(d.label)}</h3><span class="hint">Красный номер напечатан на бланке типографией. Пунктирная рамка только на экране показывает, где он, чтобы другие поля его не задевали. В PDF её нет.</span><div class="props" style="margin-top:10px">${N('x','Слева, мм')}${N('y','Сверху, мм')}${N('w','Ширина, мм')}${N('h','Высота, мм')}</div>`;return}
-  box.innerHTML=`<h3 style="margin-bottom:10px">${esc(d.label)}</h3><div class="props">${N('x','Слева, мм')}${N('y','Базовая линия, мм')}${N('w','Ширина, мм')}${N('size','Кегль, пт',.25)}
+  box.innerHTML=`<h3 style="margin-bottom:10px">${esc(d.label)}</h3>${tplBox(id,e,d)}<div class="props">${N('x','Слева, мм')}${N('y','Базовая линия, мм')}${N('w','Ширина, мм')}${N('size','Кегль, пт',.25)}
    <div class="f"><label class="l" for="pp_st">Шрифт</label><select id="pp_st" data-pp="st">${[['R','Times, обычный'],['B','Times, жирный'],['I','Times, курсив'],['L','как надписи бланка'],['LI','как надписи бланка, курсив']].map(([k,l])=>`<option value="${k}"${e.st===k?' selected':''}>${l}</option>`).join('')}</select></div>
    <div class="f"><label class="l" for="pp_align">Выравнивание</label><select id="pp_align" data-pp="align">${[['left','влево'],['center','по центру'],['right','вправо']].map(([k,l])=>`<option value="${k}"${e.align===k?' selected':''}>${l}</option>`).join('')}</select></div>
    ${N('lh','Интерлиньяж',.05)}${N('ls','Разрядка, мм',.1)}</div>
@@ -1397,6 +1423,7 @@ function bind(){
     if(t.dataset.spoil){const[k,n]=t.dataset.spoil.split(':');(S.blanks[k+'Sp']=S.blanks[k+'Sp']||[]).push(n);save();renderBlanks();toast(`Бланк ${n} отмечен испорченным, номера сдвинуты`)}
     if(t.dataset.unspoil){const[k,n]=t.dataset.unspoil.split(':');S.blanks[k+'Sp']=(S.blanks[k+'Sp']||[]).filter(x=>x!==n);save();renderBlanks()}
     if(t.dataset.sel&&!e.target.closest('select')){S.ui.sel=t.dataset.sel;renderCalib()}
+    if(t.dataset.ins){const ta=t.closest('.tplf').querySelector('textarea');const a=ta.selectionStart??ta.value.length,b=ta.selectionEnd??a;ta.value=ta.value.slice(0,a)+t.dataset.ins+ta.value.slice(b);ta.focus();const c=a+t.dataset.ins.length;ta.setSelectionRange(c,c);ta.dispatchEvent(new Event('input',{bubbles:true}));return}
     if(t.dataset.reset){delete S.layout[t.dataset.reset];S.calibOk=false;save();renderCalib();updateDots()}
     if(t.dataset.pdf)makePdf(t.dataset.pdf,t);
   });
