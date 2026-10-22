@@ -352,7 +352,7 @@ details.more summary{cursor:pointer;color:var(--muted);font-size:12.5px}
 
   <!-- 4. BLANKS -->
   <section class="tab" id="tab-blanks" hidden>
-    <div><h2>Номера бланков</h2><p class="lead">Красные номера уже напечатаны на бланках типографией, форма их не печатает. Номер бланка диплома нужен только для строки «Выдан диплом о профессиональной переподготовке №» в приложении. Обычно в пачке номера идут подряд: введите номер верхнего бланка — остальные форма раздаст слушателям по порядку сама. Если бланк испортили, нажмите «Испорчен» — номера сдвинутся.</p></div>
+    <div><h2>Номера бланков</h2><p class="lead">Красные номера уже напечатаны на бланках типографией, форма их не печатает. Красный номер бланка диплома форма печатает в приложении под словами «к диплому о профессиональной переподготовке» — у каждого слушателя свой. Обычно в пачке номера идут подряд: введите номер верхнего бланка — остальные форма раздаст слушателям по порядку сама. Если бланк испортили, нажмите «Испорчен» — номера сдвинутся.</p></div>
     <div class="grid">
       <div class="card f" style="grid-column:span 6">
         <div class="card-h"><h3>Бланки дипломов</h3><span class="sub">обязательно</span></div>
@@ -406,6 +406,12 @@ details.more summary{cursor:pointer;color:var(--muted);font-size:12.5px}
             <div class="f"><label class="l" for="ps_ah">Приложение: высота, мм</label><input id="ps_ah" data-ps="app.h" type="number" step="0.5" class="mono"></div>
           </div>
           <span class="hint">Диплом — разворот альбомный, приложение — книжное. Если поменяете размер, все поля сдвинутся пропорционально.</span>
+          <h3 style="margin:14px 0 6px">Поворот приложения в PDF</h3>
+          <div class="props">
+            <div class="f"><label class="l" for="rot_F">Лицевая сторона</label><select id="rot_F" data-rot="rotF"></select></div>
+            <div class="f"><label class="l" for="rot_B">Оборот</label><select id="rot_B" data-rot="rotB"></select></div>
+          </div>
+          <span class="hint">Редактируете вертикально, а в PDF лист приложения разворачивается на 90°, чтобы класть бланк в принтер горизонтально, как половину А4. Направление проверьте на пробном листе.</span>
         </div>
         <div class="card" style="padding:14px">
           <h3 style="margin-bottom:6px">Сдвиг при печати</h3>
@@ -438,7 +444,7 @@ details.more summary{cursor:pointer;color:var(--muted);font-size:12.5px}
     <div class="card" id="checkCard"></div>
     <div class="dl-grid" id="dlGrid">
       <div class="dl"><b>Дипломы</b><span>A4 альбомная, по странице на слушателя, в порядке списка</span><button class="btn pri" data-pdf="dip" type="button">Скачать PDF</button></div>
-      <div class="dl"><b>Приложения, двусторонние</b><span>A5: лицевая, затем оборот для каждого слушателя</span><button class="btn pri" data-pdf="app" type="button">Скачать PDF</button></div>
+      <div class="dl"><b>Приложения, двусторонние</b><span>A5: лицевая, затем оборот для каждого слушателя. Лист развёрнут так, как выбрано на шаге «Настройка под бланк»</span><button class="btn pri" data-pdf="app" type="button">Скачать PDF</button></div>
       <div class="dl"><b>Приложения по сторонам</b><span>Если принтер не печатает с двух сторон: сначала все лицевые, потом обороты</span><div class="row"><button class="btn" data-pdf="appF" type="button">Лицевые</button><button class="btn" data-pdf="appB" type="button">Обороты</button></div></div>
       <div class="dl"><b>Реестр выдачи</b><span>Excel для книги учёта: рег. номер, ФИО, номера бланков, документ об образовании</span><button class="btn" id="btnXlsx" type="button">Скачать Excel</button></div>
     </div>
@@ -533,6 +539,8 @@ function run(text,x,y,st,sz,ls=0){const f=GL[st]||GL.R,k=sz*PT_MM/f.upm,gs=[];le
 /* ============ layout definitions ============ */
 const BASE={dip:{w:290,h:205},app:{w:146,h:208}},OLDSZ={dip:{w:297,h:210},app:{w:148,h:210}};
 const pk=p=>p==='dip'?'dip':'app';
+const ROT_OPTS=[['90','верх справа'],['270','верх слева'],['0','без поворота']];
+function pageRot(page){if(page==='dip')return 0;const a=S.pageSize.app||{};const v=a[page==='appF'?'rotF':'rotB'];return v===undefined||v===null||v===''?90:(+v||0)}
 const PAGES={dip:{get w(){return S.pageSize.dip.w},get h(){return S.pageSize.dip.h},name:'Диплом, разворот (альбомный)'},appF:{get w(){return S.pageSize.app.w},get h(){return S.pageSize.app.h},name:'Приложение, лицевая сторона'},appB:{get w(){return S.pageSize.app.w},get h(){return S.pageSize.app.h},name:'Приложение, оборотная сторона'}};
 const XK=['x','w','numR','nameX'],YK=['y','h','top','headB','bottom','y0'];
 function scaleObj(o,fx,fy){const r=Object.assign({},o);for(const k of XK)if(typeof r[k]==='number')r[k]=r[k]*fx;for(const k of YK)if(typeof r[k]==='number')r[k]=r[k]*fy;if(Array.isArray(r.v))r.v=r.v.map(x=>x*fx);return r}
@@ -567,15 +575,15 @@ const DEF=[
  E('AF_org','appF','Наименование организации','data',{key:'orgFull',x:12,y:26,w:124,size:12,st:'B',lh:1.17,max:3}),
  E('AF_t2','appF','ПРИЛОЖЕНИЕ','label',{st:'L',text:'ПРИЛОЖЕНИЕ',x:0,y:57.5,w:148,size:30}),
  E('AF_t3','appF','к диплому о профессиональной переподготовке','label',{st:'L',text:'К ДИПЛОМУ О ПРОФЕССИОНАЛЬНОЙ ПЕРЕПОДГОТОВКЕ',x:0,y:63.5,w:148,size:9.5}),
- E('AF_fio','appF','ФИО','data',{key:'fio1',x:12,y:73,w:124,size:13,st:'B',max:1}),
- E('AF_prog','appF','«прошел(ла) … по программе»','data',{key:'appProg',x:12,y:82.5,w:124,size:11,lh:1.3,max:4}),
+ E('AF_dno','appF','«№» красный номер бланка диплома','data',{key:'dipNo',x:12,y:68.7,w:124,size:12,st:'B',max:1}),
+ E('AF_fio','appF','ФИО','data',{key:'fio1',x:12,y:76.5,w:124,size:13,st:'B',max:1}),
+ E('AF_prog','appF','«прошел(ла) … по программе»','data',{key:'appProg',x:12,y:84.5,w:124,size:11,lh:1.3,max:4}),
  E('AF_t4','appF','«Предыдущий документ об образовании»','label',{st:'L',text:'Предыдущий документ об образовании',x:0,y:100.5,w:148,size:11}),
  E('AF_prev','appF','Документ об образовании слушателя','data',{key:'prevEdu',x:12,y:109,w:124,size:11,lh:1.25,max:2}),
  E('AF_t5','appF','«Аттестационная комиссия решением»','label',{st:'L',text:'Аттестационная комиссия решением',x:0,y:127,w:148,size:11}),
  E('AF_dec','appF','«от … протокол …»','data',{key:'decisionOt',x:12,y:133.5,w:124,size:11,max:1}),
  E('AF_qL','appF','«присвоила квалификацию»','label',{st:'L',text:'присвоила квалификацию',x:12,y:140,w:124,size:9.5}),
  E('AF_qual','appF','Квалификация','data',{key:'qualQ',x:12,y:152,w:124,size:12,st:'B',max:2}),
- E('AF_no','appF','«Выдан диплом … № (номер бланка диплома)»','data',{key:'dipNoLine',x:10,y:169.5,w:128,size:11,st:'B',max:1}),
  E('AF_t6','appF','«Трудоемкость программы … составляет»','label',{st:'L',text:'Трудоемкость программы профессиональной переподготовки составляет',x:8,y:177,w:132,size:10.5}),
  E('AF_hrs','appF','Трудоёмкость, часов','data',{key:'hoursAF',x:40,y:186,w:68,size:12,st:'B',max:1}),
 
@@ -680,6 +688,7 @@ function ctxFor(stu,i){
     appProg:`${passed(stu.sex)} профессиональную переподготовку по программе\n${guil(p.program)}`,
     prevEdu:stu.prevEdu||'',
     dipNoLine:`Выдан диплом о профессиональной переподготовке № ${blankFor('dip',i,stu.key)}`,
+    dipNo:`№ ${blankFor('dip',i,stu.key)}`.trim(),
     grade:'',
     $v:{'фамилия':stu.surname||'','имя':stu.name||'','отчество':stu.patronymic||'','фио':fio1,'прошел':passed(stu.sex),
       'орг':p.orgShort||'','орг_полное':p.orgFull||'','программа':guil(p.program),'часы':String(p.hours||''),'ед_часов':hoursWord(p.hours,p.hoursUnit),'ед_кратко':p.hoursUnit==='ah'?'ак. час.':'час.',
@@ -692,11 +701,11 @@ function ctxFor(stu,i){
 const TPL_VARS=[['фамилия','Фамилия'],['имя','Имя'],['отчество','Отчество'],['фио','Фамилия Имя Отчество'],['прошел','прошел / прошла'],
   ['орг','Организация кратко'],['орг_полное','Организация полностью'],['программа','«Программа»'],['часы','Объём, число'],['ед_часов','академических часов'],['ед_кратко','ак. час.'],
   ['начало','Дата начала'],['окончание','Дата окончания'],['дата_решения','Дата решения'],['протокол','№ протокола'],['квалификация','«Квалификация»'],['сфера','Сфера'],
-  ['город','Город'],['дата_выдачи','Дата выдачи'],['рег_номер','Рег. номер'],['номер_диплома','№ бланка диплома'],['руководитель','Руководитель'],['предыдущее_образование','Предыдущее образование'],['доп_сведения','Доп. сведения']];
+  ['город','Город'],['дата_выдачи','Дата выдачи'],['рег_номер','Рег. номер'],['номер_диплома','Красный № бланка диплома'],['руководитель','Руководитель'],['предыдущее_образование','Предыдущее образование'],['доп_сведения','Доп. сведения']];
 const TPL_DEF={orgFull:'{орг_полное}',regNo:'{рег_номер}',city:'{город}',issueDate:'{дата_выдачи}',fio2:'{фамилия}\n{имя} {отчество}',fio1:'{фамилия} {имя} {отчество}',
   progLine:'{орг} по программе {программа} в объеме {часы} {ед_часов} с {начало} по {окончание}',decision:'{дата_решения} протокол {протокол}',decisionOt:'от {дата_решения} протокол {протокол}',
   qualQ:'{квалификация}',sphere:'{сфера}',head:'{руководитель}',appProg:'{прошел} профессиональную переподготовку по программе\n{программа}',prevEdu:'{предыдущее_образование}',
-  dipNoLine:'Выдан диплом о профессиональной переподготовке № {номер_диплома}',hoursAF:'{часы} {ед_кратко}',extra:'{доп_сведения}'};
+  dipNoLine:'Выдан диплом о профессиональной переподготовке № {номер_диплома}',dipNo:'№ {номер_диплома}',hoursAF:'{часы} {ед_кратко}',extra:'{доп_сведения}'};
 function fillTpl(t,v){if(!t)return'';if(!v||t.indexOf('{')<0)return t;return String(t).replace(/\{([а-яёa-z_]+)\}/gi,(m,k)=>{k=k.toLowerCase();return Object.prototype.hasOwnProperty.call(v,k)?v[k]:m}).split('\n').map(l=>l.replace(/[ \t]{2,}/g,' ').trim()).join('\n').replace(/^\n+|\n+$/g,'')}
 function elText(e,ctx){if(e.key===undefined)return fillTpl(e.text||'',ctx&&ctx.$v);if(typeof e.tpl==='string')return fillTpl(e.tpl,ctx.$v);return ctx[e.key]??''}
 function tblHead(T){return{h1:T.h1??'Наименование дисциплин (модулей)',h2:T.h2??(S.program.hoursUnit==='ah'?'Общее\nколичество\nакадемических\nчасов':'Общее\nколичество\nчасов'),h3:T.h3??'Оценка',tot:T.tot??'Всего'}}
@@ -777,16 +786,17 @@ async function buildPDF(kind){
   if(!studs.length){if(!test)throw new Error('Нет слушателей');studs=[calibStudent().s]}
   const getX=(st,ch)=>{const key=st+ch;if(xo.has(key))return xo.get(key);const g=gget(st,ch);const ops=g[1]?pathToPdf(g[1]):'';let v=null;if(ops){const s=ctx.flateStream(ops,{Type:'XObject',Subtype:'Form',BBox:[-1024,-1024,4096,4096]});v={ref:ctx.register(s),name:'G'+st+ch.codePointAt(0)}}xo.set(key,v);return v};
   const addPage=(page,stu,i)=>{
-    const P=PAGES[page];const pg=doc.addPage([P.w*MM_PT,P.h*MM_PT]);const used=new Set();
+    const P=PAGES[page];const rot=pageRot(page);const W=P.w*MM_PT,Hh=P.h*MM_PT;const pg=rot?doc.addPage([Hh,W]):doc.addPage([W,Hh]);const used=new Set();
     const off=S.offsets[page]||{dx:0,dy:0};const dx=+off.dx||0,dy=+off.dy||0;
     const X=x=>((x+dx)*MM_PT).toFixed(3),Y=y=>((P.h-(y+dy))*MM_PT).toFixed(3);
-    let c='';
+    let c=rot===90?`q 0 -1 1 0 0 ${W.toFixed(3)} cm `:rot===270?`q 0 1 -1 0 ${Hh.toFixed(3)} 0 cm `:'';
     const lg=(labelGray()/255).toFixed(3);
     for(const it of drawList(page,stu,i,false)){
       const rgb=it.role==='label'?`${lg} ${lg} ${lg}`:'0 0 0';
       if(it.k==='g'){const f=GL[it.st]||GL.R;const k=(it.sz/f.upm).toFixed(6);const m=it.rot<0?`0 ${k} -${k} 0`:it.rot>0?`0 -${k} ${k} 0`:`${k} 0 0 ${k}`;c+=`${rgb} rg `;for(const[ch,x,y]of it.gs){const g=getX(it.st,ch);if(!g)continue;if(!used.has(g.name)){pg.node.setXObject(PDFName.of(g.name),g.ref);used.add(g.name)}c+=`q ${m} ${X(x)} ${Y(y)} cm /${g.name} Do Q `}}
       else if(it.k==='l')c+=`${rgb} RG ${(it.w*MM_PT).toFixed(3)} w ${X(it.x1)} ${Y(it.y1)} m ${X(it.x2)} ${Y(it.y2)} l S `;
     }
+    if(rot)c+='Q';
     pg.node.addContentStream(ctx.register(ctx.flateStream(c)));
   };
   const i0=Math.min(S.ui.stu,studs.length-1);
@@ -1329,7 +1339,7 @@ function renderPrint(){
   L.push(c.miss.length?`<div class="c"><span class="pill err">не заполнено</span><span>${esc(c.miss.join(', '))}</span></div>`:`<div class="c"><span class="pill ok">программа</span><span>Все данные программы заполнены</span></div>`);
   L.push(c.noDisc?`<div class="c"><span class="pill err">дисциплины</span><span>Таблица дисциплин пустая</span></div>`:`<div class="c"><span class="pill ok">дисциплины</span><span>${S.disc.filter(d=>d.name).length} строк</span></div>`);
   L.push(!c.studs.length?`<div class="c"><span class="pill err">слушатели</span><span>Нет слушателей</span></div>`:c.prob.length?`<div class="c"><span class="pill warn">слушатели</span><span>${c.studs.length}, у ${c.prob.length} не хватает ФИО или документа об образовании: ${esc(c.prob.map(s=>s.surname||'без фамилии').join(', '))}</span></div>`:`<div class="c"><span class="pill ok">слушатели</span><span>${c.studs.length}, данные заполнены</span></div>`);
-  L.push(c.noBlank.length?`<div class="c"><span class="pill warn">бланки</span><span>Нет номера бланка диплома у ${c.noBlank.length} — строка «Выдан диплом … №» в приложении останется без номера. Заполните шаг 4.</span></div>`:c.studs.length?`<div class="c"><span class="pill ok">бланки</span><span>Номера бланков дипломов распределены</span></div>`:'');
+  L.push(c.noBlank.length?`<div class="c"><span class="pill warn">бланки</span><span>Нет номера бланка диплома у ${c.noBlank.length} — в приложении после «№» не будет номера диплома. Заполните шаг 4.</span></div>`:c.studs.length?`<div class="c"><span class="pill ok">бланки</span><span>Номера бланков дипломов распределены</span></div>`:'');
   if(c.noGrade.length)L.push(`<div class="c"><span class="pill warn">оценки</span><span>Нет оценки у ${c.noGrade.length}: ${esc(c.noGrade.map(s=>s.surname||'без фамилии').join(', '))}. Впишите на шаге 3 или задайте оценку по умолчанию на шаге 2.</span></div>`);
   $('#checkCard').innerHTML=`<div class="card-h"><h3>Проверка перед печатью</h3></div><div class="checks">${L.join('')}</div>`;
   $('#calibLock').hidden=S.calibOk;$$('#dlGrid button').forEach(b=>b.disabled=!S.calibOk);
@@ -1349,6 +1359,7 @@ function renderCalib(){
   $$('#calibSeg button').forEach(b=>b.classList.toggle('on',b.dataset.cp===pg));
   $('#calibCap').textContent=PAGES[pg].name+' · '+PAGES[pg].w+' × '+PAGES[pg].h+' мм';
   $('#calibSvg').innerHTML=svgFor(pg,s,i,{showBlank:true,interactive:true,bg:true,sel:S.ui.sel});$('#labelTone').value=S.labelTone;$('#toneVal').textContent=Math.round(S.labelTone*100)+'%';
+  for(const sel of $$('[data-rot]')){const k=sel.dataset.rot;const cur=String(pageRot(k==='rotF'?'appF':'appB'));sel.innerHTML=ROT_OPTS.map(([v,l])=>`<option value="${v}"${v===cur?' selected':''}>${l}</option>`).join('')}
   for(const i of $$('[data-ps]')){if(document.activeElement!==i){const[a,b]=i.dataset.ps.split('.');i.value=S.pageSize[a][b]}}$('#offX').value=S.offsets[pg].dx;$('#offY').value=S.offsets[pg].dy;$('#bgOpacity').value=S.bgOpacity;$('#bgClear').disabled=!BG[pg];
   $('#c3').classList.toggle('done',S.calibOk);$('#calibState').textContent=S.calibOk?'Подтверждено. Если поменяете поля или сдвиг, проверьте пробный лист ещё раз.':'Если всё легло куда нужно — подтвердите, и можно печатать на бланках.';
   const els=DEF.filter(d=>d.page===pg&&d.type!=='rect');
@@ -1399,6 +1410,7 @@ function bind(){
     if(t.dataset.pp){const v=t.type==='number'?parseFloat(t.value):t.value;if(t.type==='number'&&isNaN(v))return;setEl(S.ui.sel,{[t.dataset.pp]:v});redrawCalib()}
     if(t.dataset.ppv!==undefined){const v=parseFloat(t.value);if(isNaN(v))return;const e=el(S.ui.sel);e.v[+t.dataset.ppv]=v;setEl(S.ui.sel,{v:e.v});redrawCalib()}
     if(t.id==='offX'||t.id==='offY'){const v=parseFloat(t.value)||0;S.offsets[S.ui.cpage][t.id==='offX'?'dx':'dy']=v;S.calibOk=false;save();updateDots();$('#c3').classList.remove('done')}
+    if(t.dataset.rot){S.pageSize.app[t.dataset.rot]=+t.value;S.calibOk=false;save();updateDots();$('#c3').classList.remove('done');return}
     if(t.dataset.ps){const[a,b]=t.dataset.ps.split('.');const v=parseFloat(t.value);if(!(v>=60&&v<=500))return;S.pageSize[a][b]=v;S.calibOk=false;save();updateDots();redrawCalib();$('#calibCap').textContent=PAGES[S.ui.cpage].name+' · '+PAGES[S.ui.cpage].w+' × '+PAGES[S.ui.cpage].h+' мм'}
     if(t.id==='bgOpacity'){S.bgOpacity=+t.value;save();redrawCalib()}
     if(t.id==='labelTone'){S.labelTone=+t.value;$('#toneVal').textContent=Math.round(S.labelTone*100)+'%';save();redrawCalib()}
