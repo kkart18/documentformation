@@ -147,6 +147,8 @@ table.t td.mid{vertical-align:middle}
 .props .f{grid-column:auto}
 .tplf{margin-bottom:10px}.tplf textarea{width:100%;font:inherit;font-size:13px;line-height:1.4;resize:vertical;min-height:2.6em}.tplhead{display:grid;gap:4px;margin-bottom:6px}
 .tplv summary{cursor:pointer;font-size:12px;color:var(--muted,#666);margin:4px 0}.chips{display:flex;flex-wrap:wrap;gap:4px;margin:4px 0 6px}.chip{font:inherit;font-size:11.5px;padding:3px 7px;border:1px solid var(--line,#d5d5cf);border-radius:999px;background:var(--card,#fff);color:inherit;cursor:pointer}.chip:hover{border-color:currentColor}
+.tgl{display:inline-flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;user-select:none}.tgl input{width:auto;margin:0}
+.calib svg .guide{stroke:#E0457B;stroke-width:.3;stroke-dasharray:1.2 .8;pointer-events:none}
 .seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;flex-wrap:wrap}
 .seg button{all:unset;cursor:pointer;padding:7px 12px;font-size:13px;color:var(--muted)}
 .seg button.on{background:var(--accent);color:var(--accent-ink)}
@@ -387,6 +389,11 @@ details.more summary{cursor:pointer;color:var(--muted);font-size:12.5px}
     </div>
     <div class="row">
       <div class="seg" id="calibSeg"><button type="button" data-cp="dip" class="on">Диплом А4</button><button type="button" data-cp="appF">Приложение, лицевая</button><button type="button" data-cp="appB">Приложение, оборот</button></div>
+      <label class="tgl"><input type="checkbox" id="gridOn" checked> Сетка</label>
+      <label class="tgl" title="Поле при перетаскивании прилипает к линиям сетки и к осям других полей. Alt — двигать без прилипания"><input type="checkbox" id="snapOn" checked> Прилипание</label>
+      <button class="btn sm" id="btnAxisSel" type="button" title="Центр выбранного поля ставится точно на ось своей половины листа">Поле — на ось</button>
+      <button class="btn sm" id="btnAxisAll" type="button" title="Все поля этого листа, выровненные по центру, встают точно на оси листа (середины половин диплома, середина приложения)">Все — на оси листа</button>
+      <button class="btn sm" id="btnAxisSame" type="button" title="Все поля той же половины листа встают на одну ось с выбранным полем — сам выбранный не двигается">Все — по оси выбранного</button>
     </div>
     <div class="calib">
       <div class="calib-canvas"><div class="cap"><span id="calibCap"></span><span id="calibCursor" class="num"></span></div><div id="calibSvg"></div></div>
@@ -761,9 +768,19 @@ function drawList(page,stu,i,showBlank){
 
 /* ============ SVG render ============ */
 const INK='#141414',PRE='#8A8F8C';
+function gridSvg(W,H){let g='<g pointer-events="none">';for(let k=1;k<8;k++){const lv=k%4===0?0:k%2===0?1:2;const st=['stroke="rgba(37,99,235,.6)" stroke-width=".3"','stroke="rgba(37,99,235,.4)" stroke-width=".2"','stroke="rgba(37,99,235,.28)" stroke-width=".15" stroke-dasharray="1 1"'][lv];const x=(W*k/8).toFixed(3),y=(H*k/8).toFixed(3);g+=`<line x1="${x}" y1="0" x2="${x}" y2="${H}" ${st}/><line x1="0" y1="${y}" x2="${W}" y2="${y}" ${st}/>`}return g+'</g>'}
+function axesX(page){const W=PAGES[page].w;return page==='dip'?[W/4,W*3/4]:[W/2]}
+function anchorX(e){return e.align==='left'?e.x:e.align==='right'?e.x+e.w:e.x+e.w/2}
+function snapTargets(page,id){const P=PAGES[page];const xs=[],ys=[];for(let k=0;k<=8;k++){xs.push(P.w*k/8);ys.push(P.h*k/8)}
+  for(const d of DEF){if(d.page!==page||d.id===id||d.type)continue;const e=el(d.id);if(e.mode==='off')continue;xs.push(anchorX(e));if(e.align!=='center')xs.push(e.x,e.x+e.w);ys.push(e.y)}return{xs,ys}}
+function nearest(v,arr,thr){let b=null,bd=thr;for(const a of arr){const d=Math.abs(a-v);if(d<bd){bd=d;b=a}}return b}
+function axisFix(id){const d=DEFMAP[id];if(!d||d.type==='slot'||d.type==='vtext')return false;const e=el(id);const ax=axesX(d.page);
+  if(d.type==='table'){const c=(e.v[0]+e.v[e.v.length-1])/2;const a=nearest(c,ax,1e9);const dx=a-c;if(Math.abs(dx)<.01)return false;setEl(id,{v:e.v.map(x=>x+dx),numR:e.numR+dx,nameX:e.nameX+dx});return true}
+  if(e.align!=='center')return false;const c=e.x+e.w/2;const a=nearest(c,ax,1e9);if(Math.abs(a-c)<.005)return false;setEl(id,{x:a-e.w/2});return true}
 function svgFor(page,stu,i,{showBlank=true,interactive=false,bg=false,sel=null}={}){
   const P=PAGES[page];const items=drawList(page,stu,i,showBlank);let body='';
   if(bg&&BG[page])body+=`<image href="${BG[page]}" x="0" y="0" width="${P.w}" height="${P.h}" preserveAspectRatio="none" opacity="${S.bgOpacity}"/>`;
+  if(interactive&&S.ui.grid!==false)body+=gridSvg(P.w,P.h);
   const hits=new Map();
   for(const it of items){
     const gv=labelGray();const col=it.role==='label'?`rgb(${gv},${gv},${gv})`:INK;
@@ -1489,8 +1506,26 @@ function bind(){
   $('#calibSvg').addEventListener('pointerdown',ev=>{const h=ev.target.closest('.hit');if(!h)return;const svg=h.ownerSVGElement;S.ui.sel=h.dataset.id;const p=svgPt(svg,ev);drag={id:h.dataset.id,svg,x0:p.x,y0:p.y,dx:0,dy:0,gs:[...svg.querySelectorAll(`[data-g="${h.dataset.id}"]`),h]};drag.gs.forEach(g=>g.dataset.t=g.getAttribute('transform')||'');h.setPointerCapture(ev.pointerId);ev.preventDefault();
     $$('.hit',svg).forEach(x=>x.classList.toggle('on',x===h));$$('#elList .el').forEach(x=>x.classList.toggle('on',x.dataset.sel===drag.id));renderProps()});
   $('#calibSvg').addEventListener('pointermove',ev=>{const svg=$('#calibSvg svg');if(svg){const p=svgPt(svg,ev);if(p.x>=0&&p.y>=0&&p.x<=PAGES[S.ui.cpage].w&&p.y<=PAGES[S.ui.cpage].h)$('#calibCursor').textContent=`x ${p.x.toFixed(1)} · y ${p.y.toFixed(1)} мм`}
-    if(!drag)return;const p=svgPt(drag.svg,ev);drag.dx=p.x-drag.x0;drag.dy=p.y-drag.y0;drag.gs.forEach(g=>g.setAttribute('transform',`translate(${drag.dx} ${drag.dy}) ${g.dataset.t}`))});
-  const endDrag=()=>{if(!drag)return;const{id,dx,dy}=drag;drag=null;if(Math.abs(dx)<.05&&Math.abs(dy)<.05){renderCalib();return}moveEl(id,dx,dy)};
+    if(!drag)return;const p=svgPt(drag.svg,ev);drag.dx=p.x-drag.x0;drag.dy=p.y-drag.y0;drag.sx=drag.sy=null;
+    const e=el(drag.id);$$('.guide',drag.svg).forEach(x=>x.remove());
+    if(S.ui.snap!==false&&!ev.altKey&&!e.type){const T=drag.T||(drag.T=snapTargets(S.ui.cpage,drag.id));const ax=anchorX(e);const P=PAGES[S.ui.cpage];
+      const sx=nearest(ax+drag.dx,T.xs,1.2),sy=nearest(e.y+drag.dy,T.ys,1);
+      const NS='http://www.w3.org/2000/svg';const gl=(x1,y1,x2,y2)=>{const l=document.createElementNS(NS,'line');l.setAttribute('class','guide');l.setAttribute('x1',x1);l.setAttribute('y1',y1);l.setAttribute('x2',x2);l.setAttribute('y2',y2);drag.svg.appendChild(l)};
+      if(sx!==null){drag.dx=sx-ax;drag.sx=sx;gl(sx,0,sx,P.h)}if(sy!==null){drag.dy=sy-e.y;drag.sy=sy;gl(0,sy,P.w,sy)}}
+    drag.gs.forEach(g=>g.setAttribute('transform',`translate(${drag.dx} ${drag.dy}) ${g.dataset.t}`))});
+  const endDrag=()=>{if(!drag)return;const{id,dx,dy,sx,sy}=drag;drag=null;if(Math.abs(dx)<.05&&Math.abs(dy)<.05){renderCalib();return}
+    if(sx!=null||sy!=null){const e=el(id);setEl(id,{x:sx!=null?e.x+dx:r1(e.x+dx),y:sy!=null?e.y+dy:r1(e.y+dy)});renderCalib();return}moveEl(id,dx,dy)};
+  $('#gridOn').onchange=e=>{S.ui.grid=e.target.checked;try{localStorage.setItem('dpoDiplom.grid',e.target.checked?'1':'0')}catch{}redrawCalib()};
+  $('#snapOn').onchange=e=>{S.ui.snap=e.target.checked;try{localStorage.setItem('dpoDiplom.snap',e.target.checked?'1':'0')}catch{}};
+  try{const g=localStorage.getItem('dpoDiplom.grid'),n=localStorage.getItem('dpoDiplom.snap');if(g==='0'){S.ui.grid=false;$('#gridOn').checked=false}if(n==='0'){S.ui.snap=false;$('#snapOn').checked=false}}catch{}
+  $('#btnAxisSel').onclick=()=>{const id=S.ui.sel;if(!id||!DEFMAP[id]||DEFMAP[id].page!==S.ui.cpage){toast('Сначала выберите поле на листе');return}const e=el(id);if(!e.type&&e.align!=='center'){toast('Это поле выровнено '+(e.align==='left'?'влево':'вправо')+' — двигайте его с прилипанием');return}if(axisFix(id)){renderCalib();toast('Поле стоит на оси')}else toast('Поле уже на оси')};
+  $('#btnAxisSame').onclick=()=>{const id=S.ui.sel;const d=id&&DEFMAP[id];if(!d||d.page!==S.ui.cpage||d.type==='slot'){toast('Сначала выберите поле, по которому равнять');return}const e=el(id);if(!d.type&&e.align!=='center'){toast('Выберите поле, выровненное по центру');return}
+    const c=d.type==='table'?(e.v[0]+e.v[e.v.length-1])/2:e.x+e.w/2;const W=PAGES[S.ui.cpage].w;const side=x=>S.ui.cpage==='dip'?(x<W/2?0:1):0;let n=0;
+    for(const o of DEF){if(o.page!==S.ui.cpage||o.id===id||o.type==='slot'||o.type==='vtext')continue;const f=el(o.id);
+      if(o.type==='table'){const oc=(f.v[0]+f.v[f.v.length-1])/2;if(side(oc)!==side(c)||Math.abs(oc-c)<.005)continue;const dx=c-oc;setEl(o.id,{v:f.v.map(x=>x+dx),numR:f.numR+dx,nameX:f.nameX+dx});n++;continue}
+      if(f.align!=='center'||f.mode==='off')continue;const oc=f.x+f.w/2;if(side(oc)!==side(c)||Math.abs(oc-c)<.005)continue;setEl(o.id,{x:c-f.w/2});n++}
+    renderCalib();toast(n?`Выровнено по оси выбранного: ${n}`:'Все поля уже на этой оси')};
+  $('#btnAxisAll').onclick=()=>{let n=0;for(const d of DEF)if(d.page===S.ui.cpage&&axisFix(d.id))n++;renderCalib();toast(n?`Выровнено полей: ${n}`:'Все поля уже на осях')};
   $('#calibSvg').addEventListener('pointerup',endDrag);$('#calibSvg').addEventListener('pointercancel',endDrag);
   document.addEventListener('keydown',ev=>{if(S.ui.tab!=='calib'||!S.ui.sel)return;if(/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName))return;const st=ev.shiftKey?1:.1;const m={ArrowLeft:[-st,0],ArrowRight:[st,0],ArrowUp:[0,-st],ArrowDown:[0,st]}[ev.key];if(!m)return;ev.preventDefault();moveEl(S.ui.sel,m[0],m[1])});
 }
